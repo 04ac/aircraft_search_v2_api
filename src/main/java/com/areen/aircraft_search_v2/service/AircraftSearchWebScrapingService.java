@@ -12,48 +12,46 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
-@Service // constructor-based dependency injection
+@Service
 public class AircraftSearchWebScrapingService {
-    private Document document;
 
     public AircraftDetailsModel getAircraftDetails(String reg) {
-        try {
-            this.document = this.getJsoupDocument(reg);
-        } catch (IOException e) {
-//           logger.error("Data not found!");
-        }
-
-        if (document == null) {
-            return new AircraftDetailsModel();
-        }
-
         AircraftDetailsModel ret = new AircraftDetailsModel();
-        ret.setAircraftDetails(this.getAircraftDetailsHelper(reg));
-        ret.setRemarks(this.getRemarksHelper());
+        Document document;
+
+        try {
+            // Fetch the document for the given registration
+            document = getJsoupDocument(reg);
+        } catch (IOException e) {
+            // Log and handle error (e.g., return empty details)
+            e.printStackTrace();
+            System.err.println("Error fetching data for registration: " + reg);
+            return ret;
+        }
+
+        // Pass the document to both helper methods
+        ret.setAircraftDetails(this.getAircraftDetailsHelper(document));
+        ret.setRemarks(this.getRemarksHelper(document));
 
         return ret;
     }
 
-
     // Helper Methods Below -----------------------------------------------
 
-    private HashMap<String, String> getAircraftDetailsHelper(String reg) {
-
-        try {
-            this.document = getJsoupDocument(reg);
-        } catch (IOException e) {
-//            logger.error("Data not found!");
-        }
+    private HashMap<String, String> getAircraftDetailsHelper(Document document) {
+        HashMap<String, String> aircraftData = new HashMap<>();
 
         if (document == null) {
-            return new HashMap<>();
+            return aircraftData;
         }
 
         Elements tables = document.select("table");
+        if (tables.size() < 3) {
+            throw new RuntimeException("Aircraft Details not found.");
+        }
         Element aircraftTable = tables.get(2);  // Assuming this is the correct table
 
         // Extract headers from the table
-        HashMap<String, String> aircraftData = new HashMap<>();
         Elements headersElements = aircraftTable.select("th");
         String[] headersArray = new String[headersElements.size()];
 
@@ -80,24 +78,26 @@ public class AircraftSearchWebScrapingService {
                 break;
             }
         }
+
         return cleanMap(aircraftData);
     }
 
-    private ArrayList<String> getRemarksHelper() {
+    private ArrayList<String> getRemarksHelper(Document document) {
+        ArrayList<String> remarks = new ArrayList<>();
+
         if (document == null) {
-            return new ArrayList<>();
+            return remarks;
         }
 
         Elements tables = document.select("table");
-        Element aircraftTable = tables.get(2);
-        ArrayList<String> remarks = new ArrayList<>();
-
+        Element aircraftTable = tables.get(2);  // Assuming this is the correct table
         Elements remarkRows = aircraftTable.select("tr:has(td[colspan=2][align=right])");
 
         for (Element remarkRow : remarkRows) {
             String remark = remarkRow.select("td[colspan=17]").text().trim();
             remarks.add(capitalizeFirstLetter(remark));
         }
+
         return remarks;
     }
 
@@ -121,7 +121,6 @@ public class AircraftSearchWebScrapingService {
     }
 
     private HashMap<String, String> cleanMap(HashMap<String, String> mp) {
-
         mp.entrySet().removeIf(entry -> entry.getKey() == null || entry.getKey().isEmpty()
                 || entry.getValue() == null || entry.getValue().isEmpty());
         return mp;

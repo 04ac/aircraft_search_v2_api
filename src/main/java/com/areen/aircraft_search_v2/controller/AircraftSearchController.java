@@ -1,5 +1,6 @@
 package com.areen.aircraft_search_v2.controller;
 
+import com.areen.aircraft_search_v2.AircraftSearchV2Application;
 import com.areen.aircraft_search_v2.model.AircraftDetailsModel;
 import com.areen.aircraft_search_v2.service.AircraftSearchWebScrapingService;
 import com.areen.aircraft_search_v2.service.OCRService;
@@ -8,7 +9,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 
 @RestController
@@ -41,15 +45,24 @@ public class AircraftSearchController {
                 return ResponseEntity.ok(new ArrayList<>());
             }
 
-            // Step 2: Get details for each registration number
             List<AircraftDetailsModel> aircraftDetailsList = registrationNumbers.stream()
-                    .map(webScrapingService::getAircraftDetails)
-                    .toList(); // Assuming your web scraping service has a getAircraftDetails method
+                    .map(registration -> {
+                        try {
+                            return webScrapingService.getAircraftDetails(registration);
+                        } catch (Exception e) {
+                            // Log the error or handle it as necessary
+                            System.err.println("Failed to fetch details for registration: " + registration + " due to: " + e.getMessage());
+                            return null;  // Returning null to indicate failure for this particular registration
+                        }
+                    })
+                    .filter(Objects::nonNull)  // Remove any null results from the stream
+                    .collect(Collectors.toList());
 
             // Step 3: Return the list of aircraft details as the response
             return ResponseEntity.ok(aircraftDetailsList);
         } catch (Exception e) {
             // Handle any errors (e.g., invalid image, OCR failure, etc.)
+            System.out.println(Arrays.toString(e.getStackTrace()));
             return ResponseEntity.status(500).build();
         }
     }
